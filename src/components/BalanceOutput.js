@@ -75,18 +75,85 @@ BalanceOutput.propTypes = {
   }).isRequired
 };
 
-export default connect(state => {
-  let balance = [];
+const resolveAccountRange = (userInput, accounts) => {
+  const startAccount = isNaN(userInput.startAccount) ? accounts[0].ACCOUNT : userInput.startAccount;
+  const endAccount = isNaN(userInput.endAccount) ? accounts[accounts.length - 1].ACCOUNT : userInput.endAccount;
+  return { startAccount, endAccount };
+};
 
-  /* YOUR CODE GOES HERE */
+const resolvePeriodRange = (userInput, journalEntries) => {
+  const startPeriod = isNaN(userInput.startPeriod.valueOf()) ? journalEntries[0].PERIOD : userInput.startPeriod;
+  const endPeriod = isNaN(userInput.endPeriod.valueOf()) ? journalEntries[journalEntries.length - 1].PERIOD : userInput.endPeriod;
+  return { startPeriod, endPeriod };
+};
 
+const filterAccountsByRange = (accounts, startAccount, endAccount) => {
+  return accounts.filter(account => 
+    account.ACCOUNT >= startAccount && account.ACCOUNT <= endAccount
+  );
+};
+
+const filterJournalEntriesByPeriod = (journalEntries, startPeriod, endPeriod) => {
+  return journalEntries.filter(entry => 
+    entry.PERIOD >= startPeriod && entry.PERIOD <= endPeriod
+  );
+};
+
+const calculateAccountBalance = (account, filteredJournalEntries) => {
+  const accountEntries = filteredJournalEntries.filter(entry => 
+    entry.ACCOUNT === account.ACCOUNT
+  );
+  
+  const totalDebit = accountEntries.reduce((sum, entry) => sum + entry.DEBIT, 0);
+  const totalCredit = accountEntries.reduce((sum, entry) => sum + entry.CREDIT, 0);
+  
+  const accountBalance = totalDebit - totalCredit;
+  
+  return {
+    ACCOUNT: account.ACCOUNT,
+    DESCRIPTION: account.LABEL,
+    DEBIT: totalDebit,
+    CREDIT: totalCredit,
+    BALANCE: accountBalance
+  };
+};
+
+const calculateTotals = (balance) => {
   const totalCredit = balance.reduce((acc, entry) => acc + entry.CREDIT, 0);
   const totalDebit = balance.reduce((acc, entry) => acc + entry.DEBIT, 0);
+  return { totalCredit, totalDebit };
+};
 
+const mapStateToProps = (state) => {
+  const { accounts, journalEntries, userInput } = state;
+  
+  if (!accounts.length || !journalEntries.length || !userInput.format) {
+    return {
+      balance: [],
+      totalCredit: 0,
+      totalDebit: 0,
+      userInput
+    };
+  }
+  
+  const { startAccount, endAccount } = resolveAccountRange(userInput, accounts);
+  const { startPeriod, endPeriod } = resolvePeriodRange(userInput, journalEntries);
+  
+  const filteredAccounts = filterAccountsByRange(accounts, startAccount, endAccount);
+  const filteredJournalEntries = filterJournalEntriesByPeriod(journalEntries, startPeriod, endPeriod);
+  
+  const balance = filteredAccounts.map(account => 
+    calculateAccountBalance(account, filteredJournalEntries)
+  );
+  
+  const { totalCredit, totalDebit } = calculateTotals(balance);
+  
   return {
     balance,
     totalCredit,
     totalDebit,
-    userInput: state.userInput
+    userInput
   };
-})(BalanceOutput);
+};
+
+export default connect(mapStateToProps)(BalanceOutput);
